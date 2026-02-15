@@ -3,96 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>多國兵力識別系統 - 全能衛星戰術版</title>
+<title>多國兵力識別系統</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root{--bg0:#030a10;--bg1:#061420;--c1:#00d4ff;--c2:#f0b429;--c3:#ff4444;--t1:#d8eef8;--t2:#6a9ab0;--bdr2:#163348}
+:root{--bg0:#030a10;--bg1:#061420;--bg2:#0a1c2c;--c1:#00d4ff;--c2:#f0b429;--c3:#ff4444;--c4:#22dd77;--c5:#aa66ff;--t1:#d8eef8;--t2:#6a9ab0;--t3:#2e5065;--bdr:#0e2030;--bdr2:#163348;--cn:#ff4444;--us:#3399ff;--jp:#ff8833}
 *{box-sizing:border-box;margin:0;padding:0}
-body{height:100vh;display:flex;flex-direction:column;background:var(--bg0);color:var(--t1);font-family:sans-serif;overflow:hidden}
-#topbar{padding:10px 15px;background:#020b12;border-bottom:1px solid var(--bdr2);display:flex;justify-content:space-between;z-index:1001}
-#main{flex:1;display:flex;position:relative}
-#pageMap{flex:1;height:100%}
-.tactical-hud{position:absolute;top:15px;left:15px;z-index:1000;background:rgba(0,15,30,0.85);border:1px solid var(--c1);padding:10px;border-radius:4px;pointer-events:none}
-.search-pane{position:absolute;top:15px;right:15px;z-index:1000;width:280px;background:rgba(2,11,18,0.9);border:1px solid var(--c1);padding:10px;border-radius:4px;display:flex;flex-direction:column;max-height:80vh}
-input{background:#000;color:var(--c1);border:1px solid var(--bdr2);padding:8px;width:100%;margin-bottom:10px;outline:none}
+html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column}
+#topbar{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:8px 14px;background:#020b12;border-bottom:1px solid var(--bdr2);z-index:1001}
+.ptab{padding:6px 16px;background:var(--bg2);border:1px solid var(--bdr2);color:var(--t2);cursor:pointer;border-radius:4px;font-size:14px}
+.ptab.active{background:var(--c1);color:var(--bg0);border-color:var(--c1);font-weight:bold}
+#main{flex-grow:1;display:flex;position:relative;overflow:hidden}
+#pageMap{flex-grow:1;height:100%;background:#000}
+.tactical-hud{position:absolute;top:15px;left:15px;z-index:1000;background:rgba(0,15,30,0.85);border:1px solid var(--c1);padding:12px;color:var(--c1);font-family:monospace;pointer-events:none;border-radius:4px;box-shadow:0 0 15px rgba(0,212,255,0.3)}
+.search-pane{position:absolute;top:15px;right:15px;z-index:1000;width:300px;background:rgba(2,11,18,0.95);border:1px solid var(--c1);padding:10px;border-radius:4px;display:flex;flex-direction:column;max-height:85vh}
+input{background:#000;color:var(--c1);border:1px solid var(--bdr2);padding:10px;width:100%;margin-bottom:10px;outline:none}
 #sList{overflow-y:auto;list-style:none;font-size:12px}
-#sList li{padding:8px;border-bottom:1px solid #112233;cursor:pointer;transition:0.2s}
+#sList li{padding:10px;border-bottom:1px solid #163348;cursor:pointer}
 #sList li:hover{background:var(--bg1)}
-.threat-h{color:var(--c3)}.threat-m{color:var(--c2)}.threat-l{color:var(--c4)}
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <div style="font-weight:bold;color:var(--c1)">TAIWAN TACTICAL C4ISR v3.0</div>
-  <div style="font-size:12px;color:var(--t2)">SATELLITE: ACTIVE | DATA: 2000+ UNITS</div>
+  <div class="ptab active">戰術衛星地圖</div>
+  <div style="margin-left:auto;font-size:12px;color:var(--t3)">2026 TACTICAL DATA v4.0</div>
 </div>
 
 <div id="main">
-  <div id="pageMap"></div>
-  <div class="tactical-hud">
-    <div style="font-size:14px;font-weight:bold;color:var(--c2)">SYSTEM READY</div>
-    <div id="coords" style="font-family:monospace;margin:5px 0">LAT: -- | LON: --</div>
-    <div style="font-size:10px;color:var(--c3);border-top:1px solid #224466;padding-top:4px">
-      MEDIAN LINE: 27°N,122°E - 23°N,118°E<br>非國際法規定領海界
+  <div id="pageMap">
+    <div class="tactical-hud">
+      <div style="font-weight:bold;color:var(--c2)">狀態: 戰術監控中</div>
+      <div id="coordDisp">LAT: -- | LON: --</div>
+      <div style="color:var(--c3);font-size:11px;margin-top:6px;border-top:1px solid #2e5065;padding-top:4px">
+        海峽中線: 27°N,122°E - 23°N,118°E<br>
+        *非國際法規定領海界
+      </div>
     </div>
-  </div>
-
-  <div class="search-pane">
-    <input type="text" id="sBox" placeholder="輸入識別號/型號 (如 118, 537)...">
-    <ul id="sList"></ul>
-  </div>
-</div>
-
-<script>
-// --- 兩千多筆兵力情資擴充庫 ---
-const DB = [
-  {h:"118", n:"烏魯木齊艦", s:"052D型", nat:"cn", t:"h", note:"北戰主力, 64單元VLS"},
-  {h:"117", n:"西寧艦", s:"052D型", nat:"cn", t:"h", note:"北戰主力"},
-  {h:"101", n:"南昌艦", s:"055型", nat:"cn", t:"h", note:"萬噸大驅, 112單元VLS"},
-  {h:"102", n:"拉薩艦", s:"055型", nat:"cn", t:"h", note:"北戰最強打擊平台"},
-  {h:"537", n:"滄州艦", s:"053H2型", nat:"cn", t:"m", note:"原舟山艦, 具8枚反艦飛彈"},
-  {h:"530", n:"徐州艦", s:"054A型", nat:"cn", t:"m", note:"東戰主力護衛艦"},
-  {h:"DDG-118", n:"USS Daniel Inouye", s:"伯克IIA", nat:"us", t:"l", note:"2021服役, 神盾系統"},
-  {h:"DDG-125", n:"USS Jack H. Lucas", s:"伯克III", nat:"us", t:"l", note:"最新SPY-6雷達"}
-];
-
-// 自動生成序列補足 2000+ 筆模擬
-for(let i=120; i<=200; i++) DB.push({h:i.toString(), n:`預定型號艦 ${i}`, s:"052D/054A", nat:"cn", t:"m", note:"系列化部署艦艇"});
-for(let i=51; i<=127; i++) DB.push({h:`DDG-${i}`, n:`伯克級驅逐艦`, s:"Arleigh Burke", nat:"us", t:"l", note:"美海軍第七艦隊主力"});
-
-// --- 地圖與渲染 ---
-var map = L.map('pageMap', {center:[24.5, 121.0], zoom:7, zoomControl:false});
-
-L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
-    maxZoom:20, subdomains:['mt0','mt1','mt2','mt3'], attribution:'Google Maps'
-}).addTo(map);
-
-// 海峽中線
-L.polyline([[27,122],[23,118]], {color:'#ff4444', weight:3, dashArray:'10,15'}).addTo(map).bindTooltip("海峽中線 (非國際法規定領海界)");
-
-// 搜尋邏輯
-const sBox = document.getElementById('sBox');
-const sList = document.getElementById('sList');
-
-sBox.addEventListener('input', function() {
-    const val = this.value.toUpperCase();
-    sList.innerHTML = '';
-    if(!val) return;
-    
-    DB.filter(d => d.h.includes(val) || d.n.includes(val)).forEach(res => {
-        const li = document.createElement('li');
-        const tClass = `threat-${res.t}`;
-        li.innerHTML = `<span class="${tClass}">[${res.nat.toUpperCase()}] ${res.h}</span> - ${res.n}<br><small>${res.s} | ${res.note}</small>`;
-        li.onclick = () => alert(`【情資報告】\n名稱: ${res.n}\n識別號: ${res.h}\n型號: ${res.s}\n威脅評估: ${res.t==='h'?'高':'中'}\n備註: ${res.note}`);
-        sList.appendChild(li);
-    });
-});
-
-map.on('mousemove', e => {
-    document.getElementById('coords').innerText = `LAT: ${e.latlng.lat.toFixed(4)} | LON: ${e.latlng.lng.toFixed(4)}`;
-});
-</script>
-</body>
-</html>
+    <div class="search
